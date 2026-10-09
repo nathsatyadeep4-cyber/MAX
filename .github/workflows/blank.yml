@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -18,34 +21,63 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             git zip unzip \
             python3-pip python3-venv \
-            build-essential autoconf automake \
-            libtool pkg-config zlib1g-dev \
+            build-essential \
+            autoconf automake libtool \
+            pkg-config zlib1g-dev \
             libncurses-dev libffi-dev libssl-dev
 
       - name: Install Buildozer
         run: |
-          python3 -m pip install --user --upgrade pip
-          python3 -m pip install --user buildozer cython==0.29.36
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          python3 -m venv "$RUNNER_TEMP/buildenv"
+          echo "$RUNNER_TEMP/buildenv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/buildenv/bin/pip" install --upgrade pip setuptools wheel
+          "$RUNNER_TEMP/buildenv/bin/pip" install buildozer cython==0.29.36
 
-      - name: Verify project files
+      - name: Find project directory
+        shell: bash
         run: |
-          test -f buildozer.spec
-          test -f main.py
-          test -f feature_catalog.json
+          echo "Repository contents:"
+          ls -la
+
+          SPEC="$(find . -maxdepth 5 -type f -name buildozer.spec \
+            -not -path './.git/*' | head -n 1)"
+
+          if [ -z "$SPEC" ]; then
+            echo "::error::buildozer.spec not found. Upload the extracted project files."
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$SPEC")"
+
+          if [ ! -f "$PROJECT_DIR/main.py" ]; then
+            echo "::error::main.py not found beside buildozer.spec"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project directory: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR"
+
+      - name: Verify Python syntax
+        run: |
+          cd "$PROJECT_DIR"
+          python -m py_compile main.py
 
       - name: Build APK
-        run: buildozer android debug
+        run: |
+          cd "$PROJECT_DIR"
+          buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MAX-AI-APK
-          path: bin/*.apk
+          path: ${{ env.PROJECT_DIR }}/bin/*.apk
           if-no-files-found: error
+          retention-days: 7
