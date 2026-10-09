@@ -73,7 +73,7 @@ jobs:
           PIP_USER: "true"
           PIP_BREAK_SYSTEM_PACKAGES: "1"
         run: |
-          set -o pipefail
+          set -euo pipefail
 
           export PATH="$HOME/.local/bin:$PATH"
           unset VIRTUAL_ENV
@@ -85,9 +85,10 @@ jobs:
         if: always()
         run: |
           echo "Searching for APK files..."
+
           find . -type f -name "*.apk" \
-            -not -path "./.git/*" -print \
-            | tee apk-files.txt
+            -not -path "./.git/*" \
+            -print | tee apk-files.txt
 
           echo "Checking bin directory..."
           ls -lah bin/ || true
@@ -108,8 +109,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MAX-AI-APK
-          path: |
-            bin/*.apk
-            .buildozer/android/platform/build-*/dists/**/*.apk
-          if-no-files-found: warn
+          path: bin/*.apk
+          if-no-files-found: error
           retention-days: 7
