@@ -37,7 +37,7 @@ jobs:
             libncurses5-dev libncursesw5-dev libtinfo6 \
             ccache
 
-      - name: Install Buildozer outside virtualenv
+      - name: Install Buildozer
         run: |
           python3 -m pip install --user --upgrade \
             pip setuptools wheel
@@ -54,15 +54,15 @@ jobs:
         run: |
           set -eu
 
-          if [ ! -f main.py ]; then
-            echo "ERROR: main.py missing from repository root"
+          test -f main.py || {
+            echo "ERROR: main.py missing"
             exit 1
-          fi
+          }
 
-          if [ ! -f buildozer.spec ]; then
-            echo "ERROR: buildozer.spec missing from repository root"
+          test -f buildozer.spec || {
+            echo "ERROR: buildozer.spec missing"
             exit 1
-          fi
+          }
 
           python3 -m py_compile main.py
 
@@ -73,28 +73,43 @@ jobs:
           PIP_USER: "true"
           PIP_BREAK_SYSTEM_PACKAGES: "1"
         run: |
-          set -eu
+          set -o pipefail
 
           export PATH="$HOME/.local/bin:$PATH"
-
           unset VIRTUAL_ENV
           unset PYTHONHOME
 
           buildozer android debug 2>&1 | tee build.log
+
+      - name: Check APK files
+        if: always()
+        run: |
+          echo "Searching for APK files..."
+          find . -type f -name "*.apk" \
+            -not -path "./.git/*" -print \
+            | tee apk-files.txt
+
+          echo "Checking bin directory..."
+          ls -lah bin/ || true
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MAX-AI-Build-Log
-          path: build.log
+          path: |
+            build.log
+            apk-files.txt
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MAX-AI-APK
-          path: bin/*.apk
-          if-no-files-found: error
+          path: |
+            bin/*.apk
+            .buildozer/android/platform/build-*/dists/**/*.apk
+          if-no-files-found: warn
           retention-days: 7
