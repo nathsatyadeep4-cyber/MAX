@@ -79,7 +79,7 @@ jobs:
           unset VIRTUAL_ENV
           unset PYTHONHOME
 
-          buildozer android debug 2>&1 | tee build.log
+          yes | buildozer android debug 2>&1 | tee build.log
 
       - name: Check APK files
         if: always()
