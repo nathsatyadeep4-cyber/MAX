@@ -13,7 +13,11 @@ jobs:
   build:
     name: Build Android APK
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
+
+    env:
+      PIP_USER: "false"
+      PYTHONNOUSERSITE: "1"
 
     steps:
       - name: Checkout repository
@@ -29,35 +33,61 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip \
+            git zip unzip wget curl \
             python3 python3-venv python3-pip \
             build-essential autoconf automake libtool \
             pkg-config cmake \
             zlib1g-dev libffi-dev libssl-dev \
-            libncurses5-dev libncursesw5-dev libtinfo6
+            libncurses5-dev libncursesw5-dev libtinfo6 \
+            libltdl-dev
 
-      - name: Install Buildozer
+      - name: Create isolated Buildozer environment
         run: |
-          python3 -m venv "$HOME/buildenv"
-          "$HOME/buildenv/bin/python" -m pip install --upgrade pip setuptools wheel
-          "$HOME/buildenv/bin/python" -m pip install "Cython==0.29.36" "buildozer==1.5.0"
-          echo "$HOME/buildenv/bin" >> "$GITHUB_PATH"
+          python3 -m venv "$RUNNER_TEMP/buildenv"
+          "$RUNNER_TEMP/buildenv/bin/python" -m pip install --upgrade \
+            pip setuptools wheel
+          "$RUNNER_TEMP/buildenv/bin/python" -m pip install \
+            "Cython==0.29.36" \
+            "buildozer==1.5.0"
+          echo "$RUNNER_TEMP/buildenv/bin" >> "$GITHUB_PATH"
 
       - name: Verify project files
         run: |
-          test -f main.py || { echo "ERROR: main.py missing"; exit 1; }
-          test -f buildozer.spec || { echo "ERROR: buildozer.spec missing"; exit 1; }
+          set -eu
+          test -f main.py || {
+            echo "::error::main.py is missing from repository root"
+            exit 1
+          }
+          test -f buildozer.spec || {
+            echo "::error::buildozer.spec is missing from repository root"
+            exit 1
+          }
           python3 -m py_compile main.py
           echo "Project files verified."
 
       - name: Build MAX AI APK
-        env:
-          PIP_USER: "false"
         run: |
-          unset VIRTUAL_ENV
-          unset PYTHONHOME
-          export PATH="$HOME/buildenv/bin:$PATH"
+          set -eu
+          export PATH="$RUNNER_TEMP/buildenv/bin:$PATH"
+          unset VIRTUAL_ENV || true
+          unset PYTHONHOME || true
+
+          # Prevent pip from trying a user-site installation.
+          export PIP_USER=false
+          export PYTHONNOUSERSITE=1
+
+          buildozer --version
           buildozer android debug
+
+      - name: Check APK output
+        if: success()
+        run: |
+          set -eu
+          find bin -maxdepth 1 -type f -name "*.apk" -print
+          test -n "$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)" || {
+            echo "::error::Build finished but no APK was found in bin/"
+            exit 1
+          }
 
       - name: Upload APK
         if: success()
