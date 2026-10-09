@@ -21,50 +21,59 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             git zip unzip \
             python3-pip python3-venv \
-            build-essential \
-            autoconf automake libtool \
-            pkg-config zlib1g-dev \
+            build-essential autoconf automake \
+            libtool pkg-config zlib1g-dev \
             libncurses-dev libffi-dev libssl-dev
 
       - name: Install Buildozer
         run: |
           python3 -m venv "$RUNNER_TEMP/buildenv"
-          echo "$RUNNER_TEMP/buildenv/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/buildenv/bin/pip" install --upgrade pip setuptools wheel
           "$RUNNER_TEMP/buildenv/bin/pip" install buildozer cython==0.29.36
+          echo "$RUNNER_TEMP/buildenv/bin" >> "$GITHUB_PATH"
 
-      - name: Find project directory
+      - name: Diagnose repository
+        run: |
+          echo "Repository root:"
+          pwd
+
+          echo "Files in repository:"
+          find . -maxdepth 5 -type f \
+            -not -path './.git/*' | sort
+
+          echo "Searching for Buildozer project:"
+          find . -type f -name buildozer.spec \
+            -not -path './.git/*' -print
+
+      - name: Locate project
         shell: bash
         run: |
-          echo "Repository contents:"
-          ls -la
-
-          SPEC="$(find . -maxdepth 5 -type f -name buildozer.spec \
+          SPEC="$(find . -maxdepth 6 -type f \
+            -name buildozer.spec \
             -not -path './.git/*' | head -n 1)"
 
           if [ -z "$SPEC" ]; then
-            echo "::error::buildozer.spec not found. Upload the extracted project files."
+            echo "::error::Missing buildozer.spec. Upload the extracted project files, not just the ZIP."
             exit 1
           fi
 
           PROJECT_DIR="$(dirname "$SPEC")"
 
           if [ ! -f "$PROJECT_DIR/main.py" ]; then
-            echo "::error::main.py not found beside buildozer.spec"
+            echo "::error::main.py is missing beside $SPEC"
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Project directory: $PROJECT_DIR"
-          ls -la "$PROJECT_DIR"
+          echo "Using project: $PROJECT_DIR"
 
-      - name: Verify Python syntax
+      - name: Verify Python
         run: |
           cd "$PROJECT_DIR"
           python -m py_compile main.py
@@ -75,9 +84,9 @@ jobs:
           buildozer android debug
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MAX-AI-APK
           path: ${{ env.PROJECT_DIR }}/bin/*.apk
           if-no-files-found: error
-          retention-days: 7
