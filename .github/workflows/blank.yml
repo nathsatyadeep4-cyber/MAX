@@ -11,9 +11,16 @@ permissions:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build MAX AI APK
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 120
+
+    env:
+      PIP_USER: "false"
+      PYTHONNOUSERSITE: "1"
+      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout repository
@@ -25,96 +32,60 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             git zip unzip \
-            python3 python3-pip python3-venv \
-            build-essential autoconf automake libtool \
-            pkg-config cmake \
-            zlib1g-dev libffi-dev libssl-dev \
-            libncurses5-dev libncursesw5-dev libtinfo6 \
-            ccache
+            build-essential \
+            autoconf automake libtool \
+            pkg-config \
+            zlib1g-dev \
+            libffi-dev \
+            libssl-dev \
+            libltdl-dev \
+            cmake \
+            ccache \
+            libncurses5 \
+            libncursesw5 \
+            libtinfo5
 
-      - name: Install Buildozer
+      - name: Create build environment
         run: |
-          python3 -m venv "$HOME/buildozer-venv"
-          source "$HOME/buildozer-venv/bin/activate"
-
-          python -m pip install --upgrade pip setuptools wheel
-
-          python -m pip install \
-            "Cython==0.29.36" \
-            "buildozer==1.5.0"
-
+          python -m venv "$HOME/buildozer-venv"
           echo "$HOME/buildozer-venv/bin" >> "$GITHUB_PATH"
 
-          buildozer --version
-
-      - name: Verify Android project
+      - name: Install build tools
         run: |
-          set -eu
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install "Cython==0.29.36" "buildozer==1.5.0" "build"
 
-          test -f main.py || {
-            echo "ERROR: main.py missing"
-            exit 1
-          }
-
-          test -f buildozer.spec || {
-            echo "ERROR: buildozer.spec missing"
-            exit 1
-          }
-
-          python3 -m py_compile main.py
-
+      - name: Verify project files
+        run: |
+          test -f buildozer.spec
+          test -f main.py
           echo "Project files verified."
 
-      - name: Build MAX AI APK
-        env:
-          PIP_USER: "false"
-          PIP_BREAK_SYSTEM_PACKAGES: "1"
+      - name: Verify configuration
         run: |
-          set -euo pipefail
+          grep -n 'requirements' buildozer.spec
+          grep -n 'android.api' buildozer.spec
+          grep -n 'android.minapi' buildozer.spec
 
-          export PATH="$HOME/buildozer-venv/bin:$HOME/.local/bin:$PATH"
-
-          unset VIRTUAL_ENV
-          unset PYTHONHOME
-          unset PYTHONUSERBASE
-
-          yes | buildozer android debug 2>&1 | tee build.log
-
-      - name: Check APK files
-        if: always()
+      - name: Build APK
         run: |
-          echo "Searching for APK files..."
-
-          find . -type f -name "*.apk" \
-            -not -path "./.git/*" \
-            -print | tee apk-files.txt
-
-          echo "Checking bin directory..."
-          ls -lah bin/ || true
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: MAX-AI-Build-Log
-          path: |
-            build.log
-            apk-files.txt
-          if-no-files-found: ignore
-          retention-days: 7
+          buildozer -v android debug
 
       - name: Upload APK
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MAX-AI-APK
-          path: |
-            bin/**/*.apk
-            bin/*.apk
+          path: bin/*.apk
           if-no-files-found: warn
           retention-days: 7
