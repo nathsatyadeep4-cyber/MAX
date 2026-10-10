@@ -1,10 +1,11 @@
 [app]
+
 title = MAX AI
 package.name = maxai
 package.domain = org.maxassistant
 
 source.dir = .
-source.include_exts = py,json,kv,png,jpg,txt,md
+source.include_exts = py,json,kv,png,jpg,jpeg,txt,md
 
 version = 1.0.0
 
@@ -18,8 +19,10 @@ android.permissions = INTERNET,CAMERA,RECORD_AUDIO
 android.api = 35
 android.minapi = 24
 android.archs = arm64-v8a
-p4a.branch = v2024.01.21
+
+p4a.branch = master
 
 [buildozer]
+
 log_level = 2
 warn_on_root = 1
