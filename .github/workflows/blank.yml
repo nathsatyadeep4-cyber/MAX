@@ -95,6 +95,24 @@ jobs:
           set -o pipefail
           buildozer -v android debug 2>&1 | tee build.log
 
+      - name: Show error summary
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          n=$(grep -a -n "Command failed" build.log | tail -1 | cut -d: -f1)
+          if [ -n "$n" ]; then
+            start=$((n - 70)); [ "$start" -lt 1 ] && start=1
+            echo "=========== 70 LINES BEFORE THE FAILED COMMAND ==========="
+            sed -n "${start},${n}p" build.log | cut -c1-250
+          else
+            echo "=========== LAST 100 LINES ==========="
+            tail -n 100 build.log | cut -c1-250
+          fi
+          echo "=========== ERROR-LIKE LINES (last 15) ==========="
+          grep -a -n -E "error:|Error:|FAILED|Traceback|fatal:" build.log | tail -n 15 | cut -c1-250
+          exit 0
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
