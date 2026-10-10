@@ -18,7 +18,7 @@ android.permissions = INTERNET,CAMERA,RECORD_AUDIO
 android.api = 35
 android.minapi = 24
 android.archs = arm64-v8a
-p4a.branch = master
+p4a.branch = v2024.01.21
 
 [buildozer]
 log_level = 2
